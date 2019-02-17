@@ -59,6 +59,7 @@ photo_w = 3280     # take photos at this resolution
 photo_h = 1845
 screen_w = 1920      # resolution of the photo booth display
 screen_h = 1080
+first_run = True
 
 if TESTMODE_FAST:
     total_pics = 2     # number of pics to be taken
@@ -280,8 +281,18 @@ def main():
     print("Welcome to the photo booth!")
     print("Press the button to take a photo")
 
+    if first_run:
+        #Show splash screen
+        overlay_1 = overlay_image(REAL_PATH + "/assets/Setup.png", 10, 3)
+
     #Start camera preview
     camera.start_preview(resolution=(screen_w, screen_h))
+
+    if first_run:
+        #Wait for press
+        GPIO.wait_for_edge(pin_camera_btn, GPIO.FALLING)
+        #Set first_start to false
+        first_run = False
 
     #Display intro screen
     intro_image_1 = REAL_PATH + "/assets/intro_1.png"

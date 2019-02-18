@@ -128,10 +128,13 @@ def create_thumbnail(filePath):
     #     os.makedirs(thumbsPath)
 
     #open file, resize and save
-    with open(filePath, 'r') as f:
-        with Image.open(f) as image:
-            image.thumbnail([1920, 1080], resample=3)
-            return image
+    image = Image.open(filePath)
+    image.thumbnail([1920, 1080], resample=3)
+    return image
+    # with open(filePath, 'r') as f:
+    #     with Image.open(f) as image:
+    #         image.thumbnail([1920, 1080], resample=3)
+    #         return image
             # resizeimage.resize_cover(image, [1920, 1080])
             # cover = resizeimage.resize_cover(image, [1920, 1080])
             # cover.save(thumbFilePath, image.format)

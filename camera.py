@@ -59,6 +59,8 @@ photo_w = 3280     # take photos at this resolution
 photo_h = 1845
 screen_w = 1920      # resolution of the photo booth display
 screen_h = 1080
+thumbsTemp = []
+capturedFilesTemp = []
 
 if TESTMODE_FAST:
     total_pics = 2     # number of pics to be taken
@@ -118,18 +120,21 @@ def get_base_filename_for_images():
 
 #generate thumbnail using get_thumbnail_file_path_from_orignal_file_path()
 def create_thumbnail(filePath):
-    thumbFilePath = get_thumbnail_file_path_from_orignal_file_path(filePath)
-    thumbsPath = os.path.split(thumbFilePath)[0]
+    # thumbFilePath = get_thumbnail_file_path_from_orignal_file_path(filePath)
+    # thumbsPath = os.path.split(thumbFilePath)[0]
     
-    #check if thumbnail folder exists, if not create
-    if not os.path.exists(thumbsPath):
-        os.makedirs(thumbsPath)
+    # #check if thumbnail folder exists, if not create
+    # if not os.path.exists(thumbsPath):
+    #     os.makedirs(thumbsPath)
 
     #open file, resize and save
     with open(filePath, 'r') as f:
         with Image.open(f) as image:
-            cover = resizeimage.resize_cover(image, [1920, 1080])
-            cover.save(thumbFilePath, image.format)
+            image.thumbnail([1920, 1080], resample=3)
+            return image
+            # resizeimage.resize_cover(image, [1920, 1080])
+            # cover = resizeimage.resize_cover(image, [1920, 1080])
+            # cover.save(thumbFilePath, image.format)
 
 #Generate path to thumbnail from original file path
 def get_thumbnail_file_path_from_orignal_file_path(originalFilePath):
@@ -151,8 +156,12 @@ def remove_overlay(overlay_id):
     if overlay_id != -1:
         camera.remove_overlay(overlay_id)
 
+# overlay on image from path on screen
+def overlay_image_from_path(image_path, duration=0, layer=3):
+    return overlay_image_from_object(Image.open(image_path), duration, layer)
+
 # overlay one image on screen
-def overlay_image(image_path, duration=0, layer=3):
+def overlay_image_from_object(imgObject, duration=0, layer=3):
     """
     Add an overlay (and sleep for an optional duration).
     If sleep duration is not supplied, then overlay will need to be removed later.
@@ -165,18 +174,15 @@ def overlay_image(image_path, duration=0, layer=3):
     #  16."
     #  Refer: http://picamera.readthedocs.io/en/release-1.10/recipes1.html#overlaying-images-on-the-preview
 
-    # Load the arbitrarily sized image
-    img = Image.open(image_path)
-
     # Create an image padded to the required size with
     # mode 'RGB'
     pad = Image.new('RGB', (
-        ((img.size[0] + 31) // 32) * 32,
-        ((img.size[1] + 15) // 16) * 16,
+        ((imgObject.size[0] + 31) // 32) * 32,
+        ((imgObject.size[1] + 15) // 16) * 16,
     ))
 
     # Paste the original image into the padded one
-    pad.paste(img, (0, 0))
+    pad.paste(imgObject, (0, 0))
 
     #Get the padded image data
     try:
@@ -186,7 +192,7 @@ def overlay_image(image_path, duration=0, layer=3):
 
     # Add the overlay with the padded image as the source,
     # but the original image's dimensions
-    o_id = camera.add_overlay(padded_img_data, size=img.size)
+    o_id = camera.add_overlay(padded_img_data, size=imgObject.size)
     o_id.layer = layer
 
     if duration > 0:
@@ -211,7 +217,7 @@ def prep_for_photo_screen(photo_number):
 
     #Get ready for the next photo
     get_ready_image = REAL_PATH + "/assets/get_ready_"+str(photo_number)+".png"
-    overlay_image(get_ready_image, prep_delay)
+    overlay_image_from_path(get_ready_image, prep_delay)
 
 def taking_photo(photo_number, filename_prefix):
     """
@@ -231,16 +237,13 @@ def taking_photo(photo_number, filename_prefix):
     camera.annotate_text = ''
     print("Capture")
     camera.capture(filename)
-    print("copy to usb")
-    copy_to_usb(filename)
-    print("Create thumb")
-    create_thumbnail(filename)
     print("flash")
     flash(flash_warm_default, flash_cold_default)
     print("Photo (" + str(photo_number) + ") saved: " + filename)
+    return filename
 
 
-def playback_screen(filename_prefix):
+def playback_screen(thumbs):
     """
     Final screen before main loop restarts
     """
@@ -248,16 +251,13 @@ def playback_screen(filename_prefix):
     #Processing
     print("Processing...")
     processing_image = REAL_PATH + "/assets/processing.png"
-    overlay_image(processing_image, 2)
+    overlay_image_from_path(processing_image, 2)
     
     #Playback
     prev_overlay = False
-    for photo_number in range(1, total_pics + 1):
-        filename = filename_prefix + ' Nr.' + str(photo_number) + ' af '+ str(total_pics)+'.jpg'
-        #Get path to thumbnail
-        thumbnailPath = get_thumbnail_file_path_from_orignal_file_path(filename)
+    for thumb in thumbs:
         #display thumbnail
-        this_overlay = overlay_image(thumbnailPath, False, 3+total_pics)
+        this_overlay = overlay_image_from_object(thumb, False, 3+total_pics)
         # The idea here, is only remove the previous overlay after a new overlay is added.
         if prev_overlay:
             remove_overlay(prev_overlay)
@@ -268,7 +268,7 @@ def playback_screen(filename_prefix):
     #All done
     print("All done!")
     finished_image = REAL_PATH + "/assets/all_done_delayed_upload.png"
-    overlay_image(finished_image, 5)
+    overlay_image_from_path(finished_image, 5)
 
 
 def main():
@@ -281,7 +281,7 @@ def main():
     print("Press the button to take a photo")
 
     #Show splash screen
-    overlay_1 = overlay_image(REAL_PATH + "/assets/Setup.png", 10, 3)
+    overlay_1 = overlay_image_from_path(REAL_PATH + "/assets/Setup.png", 10, 3)
 
     #Start camera preview
     camera.start_preview(resolution=(screen_w, screen_h))
@@ -292,8 +292,8 @@ def main():
     #Display intro screen
     intro_image_1 = REAL_PATH + "/assets/intro_1.png"
     intro_image_2 = REAL_PATH + "/assets/intro_2.png"
-    overlay_1 = overlay_image(intro_image_1, 0, 3)
-    overlay_2 = overlay_image(intro_image_2, 0, 4)
+    overlay_1 = overlay_image_from_path(intro_image_1, 0, 3)
+    overlay_2 = overlay_image_from_path(intro_image_2, 0, 4)
 
     #Wait for someone to push the button
     i = 0
@@ -330,20 +330,33 @@ def main():
         remove_overlay(overlay_2)
         remove_overlay(overlay_1)
 
+        capturedFilesTemp = list()
+        thumbsTemp = list()
+
         for photo_number in range(1, total_pics + 1):
             prep_for_photo_screen(photo_number)
-            taking_photo(photo_number, filename_prefix)
+            capturedFilesTemp.append(taking_photo(photo_number, filename_prefix))
+
+        #Save to usb and make thumbs
+        processing_overlay = overlay_image_from_path(REAL_PATH + "/assets/processing.png")
+        for filepath in capturedFilesTemp:
+            print("copy to usb")
+            copy_to_usb(filepath)
+            print("Create thumb")
+            thumbsTemp.append(create_thumbnail(filepath))
+
+        remove_overlay(processing_overlay)
 
         #thanks for playing
-        playback_screen(filename_prefix)
-
+        playback_screen(thumbsTemp)
+        
         # If we were doing a test run, exit here.
         if TESTMODE_AUTOPRESS_BUTTON:
             break
 
         # Otherwise, display intro screen again
-        overlay_1 = overlay_image(intro_image_1, 0, 3)
-        overlay_2 = overlay_image(intro_image_2, 0, 4)
+        overlay_1 = overlay_image_from_path(intro_image_1, 0, 3)
+        overlay_2 = overlay_image_from_path(intro_image_2, 0, 4)
         print("Press the button to take a photo")
 
 if __name__ == "__main__":
